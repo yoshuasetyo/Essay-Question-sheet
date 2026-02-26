@@ -1,0 +1,185 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+// ==========================================
+// CONFIGURATION
+// ==========================================
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzg6qf35CIcaHSabBKuv1Qat_ba-IrHAJoRmcK3D0rpN9COxp9s4edb6_tMViM9ClJBkg/exec"; 
+const PAPER_TITLE = "Final Examination: Manual Mode"; 
+
+const ALLOWED_STUDENTS = [
+    "13", "Yoshua", "Jevan", "Student"
+];
+// ==========================================
+
+const MathText = ({ text }) => {
+    const containerRef = useRef(null);
+    useEffect(() => {
+        if (containerRef.current && window.renderMathInElement) {
+            window.renderMathInElement(containerRef.current, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false}
+                ],
+                throwOnError: false
+            });
+        }
+    }, [text]);
+    return <span ref={containerRef}>{text}</span>;
+};
+
+export default function App() {
+    const [studentName, setStudentName] = useState("");
+    const [step, setStep] = useState('loading'); 
+    const [questions, setQuestions] = useState([]);
+    const [currentIdx, setCurrentIdx] = useState(0);
+    const [accessDenied, setAccessDenied] = useState(false);
+
+    useEffect(() => {
+        // Load KaTeX dynamically for Mk 1
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
+        document.head.appendChild(link);
+
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js';
+        script.async = true;
+        document.head.appendChild(script);
+
+        const autoRender = document.createElement('script');
+        autoRender.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js';
+        autoRender.async = true;
+        document.head.appendChild(autoRender);
+
+        fetch(SCRIPT_URL)
+            .then(res => res.json())
+            .then(data => {
+                setQuestions(data);
+                setStep('name');
+            })
+            .catch(() => setStep('error'));
+    }, []);
+
+    // Keyboard navigation (Arrow Keys)
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (step !== 'view') return;
+            if (e.key === 'ArrowRight' && currentIdx < questions.length - 1) setCurrentIdx(prev => prev + 1);
+            if (e.key === 'ArrowLeft' && currentIdx > 0) setCurrentIdx(prev => prev - 1);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [currentIdx, step, questions.length]);
+
+    const startViewing = () => {
+        const trimmedName = studentName.trim().toLowerCase();
+        const isAllowed = ALLOWED_STUDENTS.some(name => name.toLowerCase() === trimmedName);
+        if (!isAllowed) { setAccessDenied(true); return; }
+        setStep('view');
+    };
+
+    if (step === 'loading') return <div className="flex items-center justify-center min-h-screen text-slate-400 font-sans">Preparing Paper...</div>;
+    if (step === 'error') return <div className="flex items-center justify-center min-h-screen p-6 font-sans"><div className="bg-white p-8 rounded-3xl shadow-xl text-center"><h2 className="text-red-500 font-bold">Connection Error</h2><p className="text-sm">Check Script URL or Sheet tab name.</p></div></div>;
+
+    if (step === 'name') {
+        return (
+            <div className="flex items-center justify-center min-h-screen p-6 bg-slate-100 font-sans">
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-md w-full text-center animate-in fade-in zoom-in duration-300">
+                    <div className="text-blue-600 text-sm font-bold tracking-[0.3em] mb-2 uppercase">QS Mk 1</div>
+                    <h1 className="text-2xl font-black text-slate-800 mb-8 leading-tight">{PAPER_TITLE}</h1>
+                    <input 
+                        type="text" 
+                        value={studentName}
+                        onChange={(e) => {setStudentName(e.target.value); setAccessDenied(false);}}
+                        className={`w-full p-4 bg-slate-50 border-2 rounded-2xl mb-2 text-center text-xl outline-none transition-all ${accessDenied ? 'border-red-400' : 'border-transparent focus:border-blue-500'}`}
+                        placeholder="Student Name"
+                    />
+                    {accessDenied && <p className="text-red-500 text-sm mb-4">Sorry, you are not allowed to access the quiz.</p>}
+                    <button onClick={startViewing} disabled={studentName.length < 2} className="w-full mt-4 bg-slate-800 text-white font-bold py-5 rounded-2xl shadow-lg active:scale-95 disabled:opacity-50">Open Question Paper</button>
+                    <p className="mt-6 text-slate-400 text-[10px] uppercase tracking-widest font-bold">Answer on your physical answer sheet</p>
+                </div>
+            </div>
+        );
+    }
+
+    const currentQuestion = questions[currentIdx];
+
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white md:bg-slate-50 font-sans">
+            <div className="max-w-4xl w-full flex flex-col gap-6">
+                
+                {/* Top Navigation Bar */}
+                <div className="flex justify-between items-center px-4">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-slate-800 text-white w-10 h-10 rounded-xl flex items-center justify-center font-bold">
+                            {currentIdx + 1}
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none">Question</p>
+                            <p className="text-slate-800 font-bold text-sm uppercase">{PAPER_TITLE}</p>
+                        </div>
+                    </div>
+                    <div className="hidden md:block text-slate-400 text-xs font-bold tracking-tighter">
+                        Student: <span className="text-slate-600 uppercase">{studentName}</span>
+                    </div>
+                </div>
+
+                {/* Main Question Surface */}
+                <div className="bg-white md:shadow-2xl md:rounded-[3rem] p-8 md:p-16 min-h-[60vh] flex flex-col justify-center relative overflow-hidden transition-all duration-500">
+                    
+                    {/* Watermark */}
+                    <div className="absolute top-10 right-10 opacity-[0.03] select-none pointer-events-none transform rotate-12">
+                        <h2 className="text-9xl font-black">EXAM</h2>
+                    </div>
+
+                    {/* Image Area */}
+                    {currentQuestion?.imageUrl && (
+                        <div className="mb-10 flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            <img 
+                                src={currentQuestion.imageUrl} 
+                                alt="Question diagram" 
+                                className="max-h-[300px] w-auto rounded-2xl shadow-sm border border-slate-100 object-contain"
+                            />
+                        </div>
+                    )}
+
+                    {/* Question Text */}
+                    <div className="text-center animate-in fade-in duration-700">
+                        <h2 className="text-2xl md:text-4xl font-bold text-slate-800 leading-[1.4] md:leading-[1.4]">
+                            <MathText text={currentQuestion?.q || ""} />
+                        </h2>
+                    </div>
+                </div>
+
+                {/* Bottom Controls */}
+                <div className="flex justify-between items-center px-4 mb-10">
+                    <button 
+                        onClick={() => currentIdx > 0 && setCurrentIdx(c => c - 1)}
+                        disabled={currentIdx === 0}
+                        className={`flex items-center gap-2 font-bold transition-all px-6 py-3 rounded-2xl ${currentIdx === 0 ? 'opacity-20' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-800'}`}
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg>
+                        PREVIOUS
+                    </button>
+
+                    <div className="flex gap-1.5">
+                        {questions.length < 15 ? questions.map((_, i) => (
+                            <div key={i} className={`h-2 rounded-full transition-all duration-300 ${i === currentIdx ? 'bg-slate-800 w-8' : 'bg-slate-200 w-2'}`} />
+                        )) : (
+                           <span className="text-slate-400 font-bold text-sm">PAGE {currentIdx + 1} OF {questions.length}</span>
+                        )}
+                    </div>
+
+                    <button 
+                        onClick={() => currentIdx < questions.length - 1 && setCurrentIdx(c => c + 1)}
+                        disabled={currentIdx === questions.length - 1}
+                        className={`flex items-center gap-2 font-bold transition-all px-6 py-3 rounded-2xl ${currentIdx === questions.length - 1 ? 'opacity-20' : 'text-slate-800 hover:bg-slate-100'}`}
+                    >
+                        NEXT
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
